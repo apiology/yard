@@ -253,7 +253,26 @@ RSpec.describe YARD::Tags::TypesExplainer do
       expect(type.first.types.map(&:name)).to eq ["String", "Symbol"]
     end
 
-    it "allows a grouped union as a fixed-tuple slot" do
+    it "treats ',' and '|' as synonyms inside square brackets" do
+      by_comma = parse("[String, Symbol]")
+      by_pipe = parse("[String | Symbol]")
+      expect(by_comma.first).to be_a(YARD::Tags::TypesExplainer::GroupType)
+      expect(by_comma.first.types.map(&:name)).to eq by_pipe.first.types.map(&:name)
+    end
+
+    it "treats '|' as a synonym for ',' at the top level" do
+      by_comma = parse("String, Symbol")
+      by_pipe = parse("String | Symbol")
+      expect(by_pipe.map(&:name)).to eq by_comma.map(&:name)
+    end
+
+    it "treats '|' as a synonym for ',' inside a collection type" do
+      type = parse("Array<String | Symbol>")
+      expect(type.first).to be_a(YARD::Tags::TypesExplainer::CollectionType)
+      expect(type.first.types.map(&:name)).to eq ["String", "Symbol"]
+    end
+
+    it "allows a grouped union as a fixed-tuple slot via square brackets" do
       type = parse("Array([String | Symbol], Integer)")
       expect(type.first).to be_a(YARD::Tags::TypesExplainer::FixedCollectionType)
       expect(type.first.types.first).to be_a(YARD::Tags::TypesExplainer::GroupType)
@@ -261,16 +280,19 @@ RSpec.describe YARD::Tags::TypesExplainer do
       expect(type.first.types.last.name).to eq "Integer"
     end
 
-    it "does not allow '|' outside of square brackets" do
-      parse_fail "String | Symbol"
+    it "allows a grouped union as a fixed-tuple slot via a bare '|', equivalent to square brackets" do
+      bare = parse("Array(String | Symbol, Integer)")
+      bracketed = parse("Array([String | Symbol], Integer)")
+      expect(bare.first).to be_a(YARD::Tags::TypesExplainer::FixedCollectionType)
+      expect(bare.first.types.first).to be_a(YARD::Tags::TypesExplainer::GroupType)
+      expect(bare.first.types.first.types.map(&:name)).to eq ["String", "Symbol"]
+      expect(bare.first.types.last.name).to eq "Integer"
+      expect(bare.first.types.first.types.map(&:name)).to eq bracketed.first.types.first.types.map(&:name)
     end
 
-    it "does not allow '|' inside a collection type" do
-      parse_fail "Array<String | Symbol>"
-    end
-
-    it "does not allow ',' inside square brackets" do
-      parse_fail "[String, Symbol]"
+    it "does not allow a dangling '|' inside a fixed-tuple slot" do
+      parse_fail "Array(String |, Integer)"
+      parse_fail "Array(| String, Integer)"
     end
 
     it "does not allow '[' to follow a type name" do
@@ -295,6 +317,23 @@ RSpec.describe YARD::Tags::TypesExplainer do
     it "parses constant values" do
       type = parse("false, true, nil, 4, :foo")
       expect(type.map(&:name)).to eq ['false', 'true', 'nil', '4', ':foo']
+    end
+
+    it "combines '&'-joined hash keys into an IntersectionType" do
+      type = parse("Hash{Foo & Bar => String}")
+      expect(type.first.key_types.size).to eq 1
+      expect(type.first.key_types.first).to be_a(YARD::Tags::TypesExplainer::IntersectionType)
+      expect(type.first.key_types.first.types.map(&:name)).to eq ["Foo", "Bar"]
+    end
+
+    it "treats ',' and '|' as synonyms for hash keys" do
+      by_comma = parse("Hash{Foo, Bar => String}")
+      by_pipe = parse("Hash{Foo | Bar => String}")
+      expect(by_comma.first.key_types.map(&:name)).to eq by_pipe.first.key_types.map(&:name)
+    end
+
+    it "does not silently accept two hash keys with no separator between them" do
+      parse_fail "Hash{Foo Bar => String}"
     end
 
     it "does not accept two commas in a row" do
@@ -417,15 +456,48 @@ RSpec.describe YARD::Tags::TypesExplainer do
       end
     end
 
-    it "does not allow ',' or bare '|' to leak across the '&'/'[...]' boundary" do
+    it "treats '|' as a synonym for ',' everywhere except directly inside '(...)'" do
       # '&' never needs '[...]' - it's legal (and binds tightest) everywhere
       expect(YARD::Tags::TypesExplainer.explain("Array<Foo & Bar, Baz>")).to eq(
         "an Array of (Foos and Bars or Bazs)"
       )
-      # but a bare '|' still requires '[...]' even next to a valid '&' usage
-      expect(YARD::Tags::TypesExplainer.explain("Foo & Bar | Baz")).to be_nil
-      # and ',' still can't cross into a '[...]' group just because '&' is nearby
-      expect(YARD::Tags::TypesExplainer.explain("[Foo & Bar, Baz]")).to be_nil
+      # a bare '|' at the top level is just another spelling of ','
+      expect(YARD::Tags::TypesExplainer.explain("Foo & Bar | Baz")).to eq(
+        YARD::Tags::TypesExplainer.explain("Foo & Bar, Baz")
+      )
+      # and ',' is likewise accepted as a synonym for '|' inside '[...]'
+      expect(YARD::Tags::TypesExplainer.explain("[Foo & Bar, Baz]")).to eq(
+        YARD::Tags::TypesExplainer.explain("[Foo & Bar | Baz]")
+      )
+    end
+
+    it "lets '|' group a fixed-tuple slot directly, equivalent to wrapping that slot in '[...]'" do
+      expect(YARD::Tags::TypesExplainer.explain("Array(Foo | Bar, Baz)")).to eq(
+        YARD::Tags::TypesExplainer.explain("Array([Foo | Bar], Baz)")
+      )
+      expect(YARD::Tags::TypesExplainer.explain("Array(Foo | Bar, Baz)")).to eq(
+        "an Array containing ((a Foo or a Bar) followed by a Baz)"
+      )
+      # '&' still binds tighter than '|' inside a fixed-tuple slot, exactly
+      # as it does everywhere else
+      expect(YARD::Tags::TypesExplainer.explain("Array(Foo & Bar | Baz, Qux)")).to eq(
+        "an Array containing (((a Foo and a Bar) or a Baz) followed by a Qux)"
+      )
+      expect(YARD::Tags::TypesExplainer.explain("Array(Foo | Bar & Baz, Qux)")).to eq(
+        "an Array containing ((a Foo or (a Bar and a Baz)) followed by a Qux)"
+      )
+    end
+
+    it "still needs '[...]' to group a union used as one conjunct of a top-level intersection" do
+      # without brackets, '|' at the top level is just ',' - so this is two
+      # independent top-level items, NOT one intersection
+      expect(YARD::Tags::TypesExplainer.explain("Foo | Bar & Baz")).to eq(
+        "a Foo; a Bar and a Baz"
+      )
+      # '[...]' raises the union's precedence above '&' to get the other reading
+      expect(YARD::Tags::TypesExplainer.explain("[Foo | Bar] & Baz")).to eq(
+        "(a Foo or a Bar) and a Baz"
+      )
     end
   end
 end

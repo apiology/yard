@@ -211,7 +211,10 @@ inherit from `Foo` and respond to `#bar` would be listed as `Foo & #bar`.
 `&` binds tighter than `,`, so `Foo & Bar, Baz` means `(Foo & Bar), Baz`: a
 value that is either "both a Foo and a Bar" or "a Baz". Use `&` again to
 intersect the same list on both sides of a `,` if that's what you mean:
-`Foo & Bar, Baz & Qux`.
+`Foo & Bar, Baz & Qux`. `&` is legal in every position a type can appear -
+top level, inside `<...>`, `(...)`, or `{...}` - and always binds tighter
+than whatever separator surrounds it; see [Operator Precedence](#Operator_Precedence)
+below.
 
 #### Hashes
 
@@ -255,43 +258,70 @@ The type name before `(...)` can be omitted, in which case it defaults to
 `Array`: `(String, Fixnum, Hash)` means the same thing as
 `Array(String, Fixnum, Hash)`.
 
+A single slot can itself be a union of types joined with `|`: in
+`Array(Integer | String, Symbol)`, the first slot is an `Integer` or a
+`String`, followed by a `Symbol`. `,` can't be reused for this the way it
+is everywhere else, since inside `(...)` it already means "next slot," not
+"either of these" - see [Grouped Unions](#Grouped_Unions) below.
+
 #### Grouped Unions
 
-A comma inside an order-dependent list already means "next slot," so there's no
-way to write "a slot that can be either of two types" using a comma there - and
-the same problem applies to any other position where `,` already has a
-different meaning. Wrapping a `|`-separated list in square brackets (`[...]`)
-groups it into a single union type that can be used anywhere a type is
-expected, including as one slot of an order-dependent list:
-`Array([Integer | String], Symbol)` describes a 2-element Array whose first
-element is an `Integer` or a `String`, followed by a `Symbol`.
+`|` is a second way to write a union, meaning the same thing as `,`
+("either of these") almost everywhere: `Integer | String` means the same
+thing as `Integer, String`, and likewise inside `<...>` and `{...}`. The
+two can be mixed freely, and read the same either way.
 
-`[...]` is dedicated entirely to this grouping; unlike `<...>`, `(...)`, and
-`{...}`, it never takes a preceding type name and is never itself a
-collection - `[Integer | String]` alone just means "an Integer or a String",
-identical in meaning to the plain top-level list `Integer, String`, just
-usable in more places. `|` is only meaningful inside `[...]`, and a plain `,`
-is not allowed inside `[...]` - a top-level type list already uses `,` for
-the same "either of these" meaning, so there is no need for two spellings of
-it in the same position.
+The one place they diverge is directly inside an order-dependent list's
+`(...)` - see [Order-Dependent Lists](#Order-Dependent_Lists) above. There,
+`,` already means "next slot," so `|` can't be a synonym for it without
+losing its own meaning; instead, `|` keeps meaning "either of these," just
+scoped to a single slot: `Array(Integer | String, Symbol)` is a 2-element
+Array, not a 3-element one.
+
+Square brackets, `[...]`, group a union - written with either `,` or
+`|` - into a single type that can be used anywhere a type is expected. This
+is what makes `Array(Integer | String, Symbol)` also writable as
+`Array([Integer | String], Symbol)`; both describe the same type. `[...]`
+still earns its keep even though `|` alone now covers the order-dependent-list
+case: it's the only way to group a union for use as one conjunct of a
+top-level intersection (see [Operator Precedence](#Operator_Precedence)
+below), since a bare union there has no way to mark where it ends.
+
+<p class="note">
+  This <code>[...]</code> is unrelated to the <code>[Types]</code> brackets
+  that delimit a tag's whole <a href="#Types_Specifier_List">types
+  specifier list</a> - that outer bracket is tag punctuation, not part of
+  any individual type. <code>[...]</code> as described here only has
+  meaning <em>inside</em> a type, e.g. as one slot of
+  <code>Array(...)</code> or one conjunct of an intersection.
+</p>
+
+`[...]` never takes a preceding type name and is never itself a collection
+- `[Integer | String]` alone just means "an Integer or a String," identical
+in meaning to the plain top-level list `Integer, String`, just usable in
+more places. It can nest inside itself (`[[Foo | Bar] | Baz]`).
 
 #### Operator Precedence
 
 `&`, `,`, and `|` can all appear in the same type, and each means something
 different depending on where it's used, so here's how they combine:
 
-* `&` always binds tighter than whichever separator surrounds it - `,` at
-  the top level, or `|` inside `[...]`. `Foo & Bar, Baz` means
-  `(Foo & Bar), Baz`, and `[Foo & Bar | Baz]` means `[(Foo & Bar) | Baz]`,
-  not `Foo & (Bar, Baz)` or `Foo & [Bar | Baz]`.
-* `|` only has meaning inside `[...]`: everywhere else, `,` already means
-  "either of these" (`Integer, String`), so a bare `|` would just be a
-  second way to write the same thing and is not valid syntax there.
-* `,` is not valid inside `[...]` - use `|` there instead, since inside an
-  order-dependent list `,` already means "next slot."
-* `[...]` can nest inside itself (`[[Foo | Bar] | Baz]`), and can be used
-  as one conjunct of an intersection in either order
-  (`[Foo | Bar] & Baz`, `Baz & [Foo | Bar]`).
+* `&` always binds tighter than whichever separator surrounds it - `,` or
+  `|` at the top level, or the current slot's `|` inside `(...)`.
+  `Foo & Bar, Baz` means `(Foo & Bar), Baz`, and
+  `Array(Foo & Bar | Baz, Qux)` means `Array((Foo & Bar) | Baz, Qux)` - a
+  2-element Array whose first slot is `(Foo & Bar) or Baz` - not
+  `Foo & (Bar, Baz)` or `Foo & (Bar | Baz)`.
+* `,` and `|` are synonyms everywhere - top level, `<...>`, `{...}`, and
+  `[...]` - except directly inside `(...)`, where `,` means "next slot" and
+  `|` means "either of these, for this slot only." Reusing `,` for the
+  latter would only ever mean "next slot," which is why `[...]` (or a bare
+  `|`) exists at all.
+* `[...]` groups a union for use as one conjunct of a top-level
+  intersection, in either order: `[Foo | Bar] & Baz` and
+  `Baz & [Foo | Bar]`. Without it, `Foo | Bar & Baz` is just `,` at the top
+  level (two independent items, `Foo` and `Bar & Baz`), not
+  `(Foo | Bar) & Baz`.
 
 #### Literals
 

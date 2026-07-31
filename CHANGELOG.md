@@ -1,7 +1,10 @@
 # main
 
-- Add support for intersection (`Foo & Bar`) and grouped-union
-  (`[Foo | Bar]`) syntax in tag type lists (closes #1644, #1699); document
+- Add support for intersection (`Foo & Bar`) types, and `|` as a second
+  way to write a union (`Foo | Bar`, a synonym for `Foo, Bar` everywhere
+  except directly inside `Array(...)`, where it groups one slot instead);
+  add `[...]` to group a union for use as one slot of an order-dependent
+  list or one conjunct of an intersection (closes #1644, #1699); document
   the existing anonymous `<A>`, `(A)`, and `{A=>B}` shorthand forms
 - Fix duplicate "View source" links after client-side navigation in default HTML template
 

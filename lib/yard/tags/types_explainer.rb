@@ -229,39 +229,51 @@ module YARD
 
         private
 
-        # @param allow_pipe [Boolean] whether a bare `|` is a legal separator
-        #   in this scope. Only true directly inside `[...]`, YARD's grouping
-        #   syntax: it lets a union be nested as a single type wherever a
-        #   type is expected, including inside constructs where `,` already
-        #   has a different meaning (an order-dependent list's positional
-        #   slots). `,` is not allowed inside `[...]` (and `|` is not allowed
-        #   anywhere else) - the two are never legal in the same scope, so
-        #   there is nothing to disambiguate between them.
-        # @param allow_comma [Boolean] whether a bare `,` is a legal separator
-        #   in this scope. False only directly inside `[...]`.
+        # @param slot_pipe [Boolean] whether `|` means "alternative within
+        #   the current slot" (like `&`, accumulated separately and only
+        #   folded in when a slot ends) rather than a synonym for `,`. Only
+        #   true directly inside `(...)`, YARD's pre-existing
+        #   order-dependent-list syntax: `,` means "next slot" there, so `|`
+        #   can't *also* mean "next slot" without losing its own meaning -
+        #   it keeps meaning "either of these", just scoped to one slot
+        #   instead of the whole list. Everywhere else, `,` and `|` are
+        #   pure synonyms: both simply mean "either of these" for the
+        #   whole list, so either can be used and mixed freely.
         #
-        # `&` (intersection) is handled orthogonally to both of the above via
-        # `intersection_conjuncts`/{#finish_intersection} - it is legal
-        # anywhere a type is expected (top-level, inside `<...>`/`(...)`,
-        # and inside `[...]` alongside `|`), and always binds tighter than
-        # whichever separator (`,` or `|`) is active in the current scope:
-        # `A & B, C` is `(A & B), C`, and `[A & B | C]` is `[(A & B) | C]`.
+        # `&` (intersection) is legal anywhere a type is expected (it never
+        #   needs this distinction), accumulated via
+        #   `intersection_conjuncts`/{#finish_intersection}, and always
+        #   binds tighter than whichever separator is active: `A & B, C` is
+        #   `(A & B), C` everywhere, and `Array(A & B | C, D)` is
+        #   `Array((A & B) | C, D)` - a 2-slot tuple whose first slot is
+        #   `(A & B) or C`.
+        #
+        # `[...]` groups a union (spelled with either `,` or `|`) into a
+        #   single type usable as one conjunct of an intersection at the
+        #   top level, where a bare union would otherwise just add another
+        #   independent top-level item instead: `[A | B] & C` groups `A`
+        #   and `B` before intersecting with `C`, where `A | B & C` would
+        #   parse as the two top-level items `A` and `B & C`.
         # @return [Array(Array<Type>, Symbol)] the parsed types and the
         #   token that ended the list
-        def parse_until(until_tokens, allow_pipe: false, allow_comma: true)
+        def parse_until(until_tokens, slot_pipe: false)
           current_parsed_types = []
           type = nil
           name = nil
           finished = false
           end_token = nil
           intersection_conjuncts = []
+          slot_conjuncts = []
           types = parse_with_handlers do |token_type, token|
             case token_type
             when *until_tokens
               raise SyntaxError, "expecting name, got '#{token}'" if name.nil?
               type = create_type(name) unless type
-              current_parsed_types << finish_intersection(intersection_conjuncts, type)
+              slot = finish_intersection(intersection_conjuncts, type)
+              slot = finish_group(slot_conjuncts, slot) if slot_pipe
+              current_parsed_types << slot
               intersection_conjuncts = []
+              slot_conjuncts = []
               finished = true
               end_token = token_type
             when :type_name
@@ -274,29 +286,36 @@ module YARD
               name = nil
               type = nil
             when :type_next
-              raise SyntaxError, "',' is not allowed inside '[...]' groups" unless allow_comma
               raise SyntaxError, "expecting name, got '#{token}' at #{@scanner.pos}" if name.nil?
               type = create_type(name) unless type
-              current_parsed_types << finish_intersection(intersection_conjuncts, type)
+              slot = finish_intersection(intersection_conjuncts, type)
+              slot = finish_group(slot_conjuncts, slot) if slot_pipe
+              current_parsed_types << slot
               intersection_conjuncts = []
+              slot_conjuncts = []
               name = nil
               type = nil
             when :union_sep
-              raise SyntaxError, "'|' is only allowed inside '[...]' groups" unless allow_pipe
               raise SyntaxError, "expecting name, got '|' at #{@scanner.pos}" if name.nil?
               type = create_type(name) unless type
-              current_parsed_types << finish_intersection(intersection_conjuncts, type)
+              combined = finish_intersection(intersection_conjuncts, type)
               intersection_conjuncts = []
+              if slot_pipe
+                slot_conjuncts << combined
+              else
+                current_parsed_types << combined
+              end
               name = nil
               type = nil
             when :fixed_collection_start, :collection_start
+              is_fixed = token_type == :fixed_collection_start
               name ||= "Array"
-              klass = token_type == :collection_start ? CollectionType : FixedCollectionType
-              nested_types, = parse_until([:fixed_collection_end, :collection_end, :parse_end])
+              klass = is_fixed ? FixedCollectionType : CollectionType
+              nested_types, = parse_until([:fixed_collection_end, :collection_end, :parse_end], slot_pipe: is_fixed)
               type = klass.new(name, nested_types)
             when :group_start
               raise SyntaxError, "'[' cannot follow a type name" if name
-              nested_types, = parse_until([:group_end, :parse_end], allow_pipe: true, allow_comma: false)
+              nested_types, = parse_until([:group_end, :parse_end])
               type = GroupType.new(nested_types)
               name = "Group"
             when :hash_collection_start
@@ -331,17 +350,42 @@ module YARD
         def parse_hash_collection(name)
           key_value_pairs = []
           current_keys = []
+          key_name = nil
+          key_type = nil
+          intersection_conjuncts = []
           finished = false
+
+          # Finalizes whatever key is pending (if any) into `current_keys`,
+          # the same way `parse_until` finalizes a union member - `&` binds
+          # tighter than the `,`/`|` (synonyms here, as everywhere outside
+          # `(...)`) that separates keys.
+          finalize_key = lambda do
+            next if key_name.nil?
+            key_type = create_type(key_name) unless key_type
+            current_keys << finish_intersection(intersection_conjuncts, key_type)
+            intersection_conjuncts = []
+            key_name = nil
+            key_type = nil
+          end
 
           parse_with_handlers do |token_type, token|
             case token_type
             when :type_name
-              current_keys << create_type(token)
-            when :type_next
-              # Comma - continue collecting keys unless we just processed a value
-              # In that case, start a new key group
+              raise SyntaxError, "expecting END, got name '#{token}'" if key_name
+              key_name = token
+            when :intersect
+              raise SyntaxError, "expecting name, got '&' at #{@scanner.pos}" if key_name.nil?
+              key_type = create_type(key_name) unless key_type
+              intersection_conjuncts << key_type
+              key_name = nil
+              key_type = nil
+            when :type_next, :union_sep
+              # ',' and '|' are synonyms here, as everywhere outside '(...)'
+              raise SyntaxError, "expecting name, got '#{token}' at #{@scanner.pos}" if key_name.nil?
+              finalize_key.call
             when :hash_collection_value
               # => - current keys map to the next value(s)
+              finalize_key.call
               raise SyntaxError, "no keys before =>" if current_keys.empty?
               values, end_token = parse_until([:hash_collection_value_end, :hash_collection_end, :parse_end])
               key_value_pairs << [current_keys, values]
@@ -377,6 +421,20 @@ module YARD
           else
             IntersectionType.new(all_types)
           end
+        end
+
+        # Combines the `|`-separated conjuncts of one order-dependent-list
+        # slot (`A | B` in `Array(A | B, C)`) with the slot's final type
+        # into a single {GroupType}, the same representation `[...]`
+        # produces - so `Array(A | B, C)` and `Array([A | B], C)` describe
+        # the same type.
+        #
+        # @param conjuncts [Array<Type>] the conjuncts seen so far (may be empty)
+        # @param last_type [Type] the final conjunct in the slot
+        # @return [Type] the combined type for this slot
+        def finish_group(conjuncts, last_type)
+          return last_type if conjuncts.empty?
+          GroupType.new(conjuncts + [last_type])
         end
 
         def create_type(name)
