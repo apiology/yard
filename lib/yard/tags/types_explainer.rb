@@ -70,6 +70,19 @@ module YARD
       end
 
       # @private
+      class IntersectionType < Type
+        attr_accessor :types
+
+        def initialize(types)
+          @types = types
+        end
+
+        def to_s(singular = true)
+          list_join(types.map {|t| t.to_s(singular) }, with: "and")
+        end
+      end
+
+      # @private
       class CollectionType < Type
         attr_accessor :types
 
@@ -157,6 +170,7 @@ module YARD
           :type_name => /#{ISEP}#{METHODNAMEMATCH}|#{NAMESPACEMATCH}|#{LITERALMATCH}|\w+/,
           :symbol => /:#{METHODNAMEMATCH}/,
           :type_next => /[,]/,
+          :intersect => /&/,
           :whitespace => /\s+/,
           :hash_collection_start => /\{/,
           :hash_collection_value => /=>/,
@@ -187,21 +201,30 @@ module YARD
           name = nil
           finished = false
           end_token = nil
+          intersection_conjuncts = []
           types = parse_with_handlers do |token_type, token|
             case token_type
             when *until_tokens
               raise SyntaxError, "expecting name, got '#{token}'" if name.nil?
               type = create_type(name) unless type
-              current_parsed_types << type
+              current_parsed_types << finish_intersection(intersection_conjuncts, type)
+              intersection_conjuncts = []
               finished = true
               end_token = token_type
             when :type_name
               raise SyntaxError, "expecting END, got name '#{token}'" if name
               name = token
+            when :intersect
+              raise SyntaxError, "expecting name, got '&' at #{@scanner.pos}" if name.nil?
+              type = create_type(name) unless type
+              intersection_conjuncts << type
+              name = nil
+              type = nil
             when :type_next
               raise SyntaxError, "expecting name, got '#{token}' at #{@scanner.pos}" if name.nil?
               type = create_type(name) unless type
-              current_parsed_types << type
+              current_parsed_types << finish_intersection(intersection_conjuncts, type)
+              intersection_conjuncts = []
               name = nil
               type = nil
             when :fixed_collection_start, :collection_start
@@ -269,6 +292,25 @@ module YARD
         end
 
         private
+
+        # Combines the conjuncts of an `A & B & ...` intersection with the
+        # final type in the chain. Consecutive duck-types (`#foo & #bar`)
+        # collapse into a single {DuckType} listing all of the methods, to
+        # match the pre-existing duck-type convention; any other mix of
+        # types becomes an {IntersectionType}.
+        #
+        # @param conjuncts [Array<Type>] the conjuncts seen so far (may be empty)
+        # @param last_type [Type] the final conjunct in the chain
+        # @return [Type] the combined type for this union slot
+        def finish_intersection(conjuncts, last_type)
+          return last_type if conjuncts.empty?
+          all_types = conjuncts + [last_type]
+          if all_types.all? {|t| t.is_a?(DuckType) }
+            DuckType.new(all_types.map(&:name).join(' & '))
+          else
+            IntersectionType.new(all_types)
+          end
+        end
 
         def create_type(name)
           if name[0, 1] == ":" || (name[0, 1] =~ /['"]/ && name[-1, 1] =~ /['"]/)

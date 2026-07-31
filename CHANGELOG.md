@@ -1,5 +1,6 @@
 # main
 
+- Add support for intersection types (`Foo & Bar`) in tag type lists (closes #1644)
 - Fix duplicate "View source" links after client-side navigation in default HTML template
 
 # [0.9.45] - July 14th, 2026

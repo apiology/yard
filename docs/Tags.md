@@ -194,6 +194,25 @@ that responds to the "read" method:
     # @param io [#read] the input object to read from
     def read(io) io.read end
 
+#### Intersection Types
+
+Types joined with `&` describe an intersection: a value that satisfies every
+type listed, rather than any one of them (which is what a comma-separated
+list, a union, already means). For instance, an argument that must both
+inherit from `Foo` and respond to `#bar` would be listed as `Foo & #bar`.
+
+    # Accepts any Comparable string.
+    # @param value [String & Comparable] the value to accept
+    def accept(value) end
+
+`&` binds tighter than `,`, so `Foo & Bar, Baz` means `(Foo & Bar), Baz`: a
+value that is either "both a Foo and a Bar" or "a Baz". Use `&` again to
+intersect the same list on both sides of a `,` if that's what you mean:
+`Foo & Bar, Baz & Qux`.
+
+Note that this only affects how the type is interpreted (for instance, by
+{YARD::Tags::TypesExplainer}); it does not add type-checking on its own.
+
 #### Hashes
 
 Hashes can be specified either via the parametrized type discussed above,

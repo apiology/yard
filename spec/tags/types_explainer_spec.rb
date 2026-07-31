@@ -72,6 +72,19 @@ RSpec.describe YARD::Tags::TypesExplainer do
     end
   end
 
+  describe YARD::Tags::TypesExplainer::IntersectionType, '#to_s' do
+    it "works for two types" do
+      intersection = described_class.new([type("Foo"), type("Bar")])
+      expect(intersection.to_s).to eq "a Foo and a Bar"
+      expect(intersection.to_s(false)).to eq "Foos and Bars"
+    end
+
+    it "works for more than two types" do
+      intersection = described_class.new([type("Foo"), type("Bar"), type("Baz")])
+      expect(intersection.to_s).to eq "a Foo, a Bar and a Baz"
+    end
+  end
+
   describe YARD::Tags::TypesExplainer::LiteralType, '#to_s' do
     it "works for literal values" do
       [':symbol', "'5'"].each do |name|
@@ -266,6 +279,27 @@ RSpec.describe YARD::Tags::TypesExplainer do
         "Hash{:key_one, :key_two => String; :key_three => Symbol}" => "a Hash with keys made of (a literal value :key_one or a literal value :key_two) and values of (Strings) and keys made of (a literal value :key_three) and values of (Symbols)",
         "Hash{:key_one, :key_two => String; :key_three => Symbol; :key_four => Hash{:sub_key_one => String}}" => "a Hash with keys made of (a literal value :key_one or a literal value :key_two) and values of (Strings) and keys made of (a literal value :key_three) and values of (Symbols) and keys made of (a literal value :key_four) and values of (a Hash with keys made of (a literal value :sub_key_one) and values of (Strings))",
         "Hash{:key_one => String, Number; :key_two => String}" => "a Hash with keys made of (a literal value :key_one) and values of (Strings or Numbers) and keys made of (a literal value :key_two) and values of (Strings)"
+      }
+      expect.each do |input, expected|
+        explain = YARD::Tags::TypesExplainer.explain(input)
+        expect(explain).to eq expected.delete("\n").squeeze(' ')
+      end
+    end
+
+    it "parses intersection types (`&`)" do
+      expect = {
+        "Foo & Bar" => "a Foo and a Bar",
+        "Foo & Bar & Baz" => "a Foo, a Bar and a Baz",
+        "Array<Foo & Bar>" => "an Array of (Foos and Bars)",
+        # `&` binds tighter than `,`, matching RBS's `A & B | C` == `(A & B) | C`
+        "Foo & Bar, Baz & Qux" => "a Foo and a Bar; a Baz and a Qux",
+        "Foo, Bar & Baz" => "a Foo; a Bar and a Baz",
+        # consecutive duck-types joined by `&` collapse into a single duck-type,
+        # matching the pre-existing "#method_one & #method_two" convention
+        "#read & #write" => "an object that responds to #read and #write",
+        "#read&#write&#close" => "an object that responds to #read, #write and #close",
+        # a duck-type intersected with a real type stays a full intersection
+        "Foo & #read" => "a Foo and an object that responds to #read"
       }
       expect.each do |input, expected|
         explain = YARD::Tags::TypesExplainer.explain(input)
