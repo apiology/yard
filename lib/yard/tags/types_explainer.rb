@@ -128,6 +128,29 @@ module YARD
       end
 
       # @private
+      #
+      # Unlike {CollectionType}, this doesn't assert that its type
+      # parameters are alternatives ("of (A's or B's)") - `<...>` is
+      # conventionally used both ways (a homogeneous collection's element
+      # type(s), or a class's distinct positional type-parameter roles,
+      # e.g. `Result<Success, Failure>`), and there's no way for YARD to
+      # know which one a given class means. This is the honest fallback
+      # for any name not specifically known to mean the former.
+      class ParametrizedType < Type
+        attr_accessor :types
+
+        def initialize(name, types)
+          @name = name
+          @types = types
+        end
+
+        def to_s(_singular = true)
+          "a#{name[0, 1] =~ /[aeiou]/i ? 'n' : ''} #{name} with type parameters (" +
+            types.map {|t| t.to_s(true) }.join(", ") + ")"
+        end
+      end
+
+      # @private
       class FixedCollectionType < CollectionType
         def to_s(_singular = true)
           "a#{name[0, 1] =~ /[aeiou]/i ? 'n' : ''} #{name} containing (" + types.map(&:to_s).join(" followed by ") + ")"
@@ -213,6 +236,13 @@ module YARD
           # :symbol_start => /:/,
           :parse_end => nil
         }
+
+        # Type names known in advance to be genuinely homogeneous
+        # collections, where `<...>`'s comma-separated slots really do mean
+        # "any one of these". Fixed and not user-configurable - YARD has no
+        # syntax for a class to declare its own `<...>` convention, so this
+        # can only ever be a hardcoded, conservative list.
+        UNION_COLLECTION_NAMES = %w[Array Set].freeze
 
         def self.parse(string)
           new(string).parse
@@ -310,9 +340,27 @@ module YARD
             when :fixed_collection_start, :collection_start
               is_fixed = token_type == :fixed_collection_start
               name ||= "Array"
-              klass = is_fixed ? FixedCollectionType : CollectionType
               nested_types, = parse_until([:fixed_collection_end, :collection_end, :parse_end], slot_pipe: is_fixed)
-              type = klass.new(name, nested_types)
+              type = if is_fixed
+                FixedCollectionType.new(name, nested_types)
+              elsif name == "Hash" && nested_types.size == 2
+                # `Hash<KeyType, ValueType>` is documented as positional
+                # (slot 0 = key type, slot 1 = value type), matching the
+                # dedicated `Hash{K=>V}` syntax - not an implicit union.
+                HashCollectionType.new(name, [nested_types[0]], [nested_types[1]])
+              elsif nested_types.size <= 1 || UNION_COLLECTION_NAMES.include?(name)
+                # A single slot is never ambiguous (nothing to distinguish
+                # union from positional with only one type), and these
+                # names are known, genuinely homogeneous collections.
+                CollectionType.new(name, nested_types)
+              else
+                # `<...>` is conventionally used both ways - a homogeneous
+                # collection's element type(s), or a class's distinct
+                # positional type-parameter roles - and YARD has no way to
+                # know which one an arbitrary class means. Don't assert
+                # union for a name we don't specifically know means that.
+                ParametrizedType.new(name, nested_types)
+              end
             when :group_start
               raise SyntaxError, "'[' cannot follow a type name" if name
               nested_types, = parse_until([:group_end, :parse_end])

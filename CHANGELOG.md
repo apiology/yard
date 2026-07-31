@@ -6,6 +6,13 @@
   add `[...]` to group a union for use as one slot of an order-dependent
   list or one conjunct of an intersection (closes #1644, #1699); document
   the existing anonymous `<A>`, `(A)`, and `{A=>B}` shorthand forms
+- Stop assuming `Foo<A, B>` always means "A or B": only `Array`/`Set` (known
+  homogeneous collections) keep that implicit-union reading; any other
+  name with 2+ type parameters now reads neutrally as "with type
+  parameters (A, B)", since `<...>` is also conventionally used for a
+  class's distinct positional roles (e.g. `Result<Success, Failure>`).
+  `Hash<KeyType, ValueType>` gets its own dedicated positional rendering,
+  matching `Hash{KeyType=>ValueType}`
 - Fix duplicate "View source" links after client-side navigation in default HTML template
 
 # [0.9.45] - July 14th, 2026

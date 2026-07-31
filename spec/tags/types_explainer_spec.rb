@@ -145,6 +145,13 @@ RSpec.describe YARD::Tags::TypesExplainer do
     end
   end
 
+  describe YARD::Tags::TypesExplainer::ParametrizedType, '#to_s' do
+    it "lists type parameters without pluralizing or asserting union/order" do
+      parametrized = described_class.new("Result", [type("Success"), type("Failure")])
+      expect(parametrized.to_s).to eq "a Result with type parameters (a Success, a Failure)"
+    end
+  end
+
   describe YARD::Tags::TypesExplainer::FixedCollectionType, '#to_s' do
     before { @t = described_class.new("Array", nil) }
 
@@ -235,6 +242,40 @@ RSpec.describe YARD::Tags::TypesExplainer do
       expect(type.first.types.size).to eq 1
       expect(type.first.name).to eq "MyList"
       expect(type.first.types.first.name).to eq "String"
+    end
+
+    it "keeps the implicit-union CollectionType for a single type parameter, regardless of name" do
+      type = parse("MyBox<Contents>")
+      expect(type.first).to be_a(YARD::Tags::TypesExplainer::CollectionType)
+    end
+
+    it "keeps the implicit-union CollectionType for allow-listed names with 2+ parameters" do
+      type = parse("Array<Foo, Bar>")
+      expect(type.first).to be_a(YARD::Tags::TypesExplainer::CollectionType)
+      type = parse("Set<Foo, Bar>")
+      expect(type.first).to be_a(YARD::Tags::TypesExplainer::CollectionType)
+    end
+
+    it "uses ParametrizedType for a non-allow-listed name with 2+ parameters" do
+      type = parse("Result<Success, Failure>")
+      expect(type.first).to be_a(YARD::Tags::TypesExplainer::ParametrizedType)
+      expect(type.first.name).to eq "Result"
+      expect(type.first.types.map(&:name)).to eq ["Success", "Failure"]
+    end
+
+    it "special-cases Hash<KeyType, ValueType> to match Hash{K=>V}'s key/value rendering" do
+      by_angle_brackets = parse("Hash<KeyType, ValueType>")
+      by_braces = parse("Hash{KeyType => ValueType}")
+      expect(by_angle_brackets.first).to be_a(YARD::Tags::TypesExplainer::HashCollectionType)
+      expect(by_angle_brackets.first.key_types.map(&:name)).to eq by_braces.first.key_types.map(&:name)
+      expect(by_angle_brackets.first.value_types.map(&:name)).to eq by_braces.first.value_types.map(&:name)
+    end
+
+    it "falls back to ParametrizedType for Hash<...> with the wrong number of parameters" do
+      type = parse("Hash<A, B, C>")
+      expect(type.first).to be_a(YARD::Tags::TypesExplainer::ParametrizedType)
+      type = parse("Hash<A>")
+      expect(type.first).to be_a(YARD::Tags::TypesExplainer::CollectionType)
     end
 
     it "allows a collection type without a name" do
@@ -498,6 +539,28 @@ RSpec.describe YARD::Tags::TypesExplainer do
       expect(YARD::Tags::TypesExplainer.explain("[Foo | Bar] & Baz")).to eq(
         "(a Foo or a Bar) and a Baz"
       )
+    end
+
+    it "does not assume <...> always means union, for names that aren't known collections" do
+      expect = {
+        # allow-listed names keep the implicit-union reading
+        "Array<Foo, Bar>" => "an Array of (Foos or Bars)",
+        "Set<Foo, Bar>" => "a Set of (Foos or Bars)",
+        # Hash<KeyType, ValueType> is documented as positional (key, then
+        # value), matching Hash{K=>V} - not "KeyTypes or ValueTypes"
+        "Hash<Symbol, String>" => "a Hash with keys made of (Symbols) and values of (Strings)",
+        # a single parameter is never ambiguous, so it's unaffected
+        # regardless of the name
+        "Box<Contents>" => "a Box of (Contentss)",
+        # an unrecognized name with 2+ parameters doesn't assert union -
+        # RBS-style positional generics like Result<Success, Failure> are
+        # exactly the case this protects
+        "Result<Success, Failure>" => "a Result with type parameters (a Success, a Failure)"
+      }
+      expect.each do |input, expected|
+        explain = YARD::Tags::TypesExplainer.explain(input)
+        expect(explain).to eq expected.delete("\n").squeeze(' ')
+      end
     end
   end
 end

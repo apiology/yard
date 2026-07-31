@@ -185,6 +185,23 @@ in any order. When the order matters, use "order-dependent lists", described bel
 The type name before `<...>` can be omitted, in which case it defaults to
 `Array`: `<String, Fixnum>` means the same thing as `Array<String, Fixnum>`.
 
+Note that `Foo<A, B>` is used two different ways in practice, and YARD has no
+syntax for a class to declare which one it means: `A, B` can be a list of
+alternative element types for a homogeneous collection (as with `Array` and
+`Set` above), or it can be a list of a generic class's distinct, positional
+type-parameter roles (for instance, `Result<Success, Failure>` - `Success`
+and `Failure` are not "either of these", they're two different roles). Since
+there's no way to tell these apart from the syntax alone, only `Array` and
+`Set` are treated as the first (implicit-union) kind; any other name with
+two or more parameters is described neutrally, without asserting either
+reading, e.g. `Result<Success, Failure>` reads as "a Result with type
+parameters (a Success, a Failure)". A single parameter is never ambiguous
+(there's nothing to distinguish a union from a positional role when there's
+only one), so it's unaffected either way. `Hash<KeyType, ValueType>` is a
+special case with its own dedicated positional meaning (slot 1 is the key
+type, slot 2 is the value type), matching the `Hash{KeyType=>ValueType}`
+syntax described below - not an implicit union of "KeyTypes or ValueTypes".
+
 #### Duck-Types
 
 Duck-types are allowed in type specifier lists, and are identified by method
