@@ -284,8 +284,11 @@ different depending on where it's used, so here's how they combine:
   the top level, or `|` inside `[...]`. `Foo & Bar, Baz` means
   `(Foo & Bar), Baz`, and `[Foo & Bar | Baz]` means `[(Foo & Bar) | Baz]`,
   not `Foo & (Bar, Baz)` or `Foo & [Bar | Baz]`.
-* `|` only has meaning inside `[...]` - anywhere else, it's not valid syntax.
-* `,` is not valid inside `[...]` - use `|` there instead.
+* `|` only has meaning inside `[...]`: everywhere else, `,` already means
+  "either of these" (`Integer, String`), so a bare `|` would just be a
+  second way to write the same thing and is not valid syntax there.
+* `,` is not valid inside `[...]` - use `|` there instead, since inside an
+  order-dependent list `,` already means "next slot."
 * `[...]` can nest inside itself (`[[Foo | Bar] | Baz]`), and can be used
   as one conjunct of an intersection in either order
   (`[Foo | Bar] & Baz`, `Baz & [Foo | Bar]`).
