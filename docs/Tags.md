@@ -210,9 +210,6 @@ value that is either "both a Foo and a Bar" or "a Baz". Use `&` again to
 intersect the same list on both sides of a `,` if that's what you mean:
 `Foo & Bar, Baz & Qux`.
 
-Note that this only affects how the type is interpreted (for instance, by
-{YARD::Tags::TypesExplainer}); it does not add type-checking on its own.
-
 #### Hashes
 
 Hashes can be specified either via the parametrized type discussed above,
