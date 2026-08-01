@@ -208,8 +208,8 @@ that responds to the "read" method:
 #### Intersection Types
 
 Types joined with `&` describe an intersection: a value that satisfies every
-type listed, rather than any one of them (which is what a comma-separated
-list, a union, already means). For instance, an argument that must both
+type listed, rather than any one of them (which is what a union - the `|`
+operator - already means). For instance, an argument that must both
 inherit from `Foo` and respond to `#bar` would be listed as `Foo & #bar`.
 
     # Accepts any Comparable string.
@@ -305,11 +305,10 @@ Inside `[...]`, `,` and `|` both mean a union, so `[Foo, Bar]` and
 `[Foo | Bar]` describe the same type.
 
 <p class="note">
-  This <code>[...]</code> is unrelated to the <code>[Types]</code> brackets
-  that delimit a tag's whole <a href="#Types_Specifier_List">types
-  specifier list</a> - that outer bracket is tag punctuation, not part of
-  any individual type. <code>[...]</code> as described here only has
-  meaning <em>inside</em> a type.
+  While you can treat them the same in practice, this <code>[...]</code> is
+  not the same thing as the <code>[Types]</code> brackets that delimit a
+  tag's whole <a href="#Types_Specifier_List">types specifier list</a> -
+  that outer bracket is tag punctuation, not part of any individual type.
 </p>
 
 `[...]` never takes a preceding type name - `[Integer | String]` alone
