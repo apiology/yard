@@ -182,9 +182,7 @@ A given type may treat its `<...>` parameters as an implicit union, meaning
 order matters. For instance, `Array<String, Fixnum>` can contain any
 amount of Strings or Fixnums, in any order, while in
 `Result<Success, Failure>`, `Success` and `Failure` are not "either of
-these" - they're two different roles. Either way, this is still different
-from an "order-dependent list" (described below), which asserts an exact
-sequence of elements rather than naming parameter roles.
+these" - they're two different roles.
 
 The type name before `<...>` can be omitted, in which case it defaults to
 `Array`: `<String, Fixnum>` means the same thing as `Array<String, Fixnum>`.
