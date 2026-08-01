@@ -288,11 +288,11 @@ Result whose first type parameter is a Success or a Failure.
 
 #### Grouping
 
-Square brackets, `[...]`, group a list of types - written with either `,`
-or `|` - into a single type that can be used anywhere a type is expected.
-Its main use is grouping a union for use as one conjunct of an
-intersection, since a bare union there has no way to mark where it ends:
-`[Integer | String] & Comparable`.
+Just like parentheses in algebra, `[...]` groups a list of types -
+written with either `,` or `|` - into a single type, letting you control
+how it combines with the types around it. For example, grouping a union
+lets it be used as one conjunct of an intersection, where a bare union
+would otherwise have no way to mark where it ends: `[Integer | String] & Comparable`.
 
 <p class="note">
   This <code>[...]</code> is unrelated to the <code>[Types]</code> brackets
@@ -303,10 +303,10 @@ intersection, since a bare union there has no way to mark where it ends:
   <code>Array(...)</code> or one conjunct of an intersection.
 </p>
 
-`[...]` never takes a preceding type name and is never itself a collection
-- `[Integer | String]` alone just means "an Integer or a String," identical
-in meaning to the plain top-level list `Integer, String`, just usable in
-more places. It can nest inside itself (`[[Foo | Bar] | Baz]`).
+`[...]` never takes a preceding type name - `[Integer | String]` alone
+just means "an Integer or a String," identical in meaning to the plain
+top-level list `Integer, String`, just usable in more places. It can nest
+inside itself (`[[Foo | Bar] | Baz]`).
 
 #### Operator Precedence
 
