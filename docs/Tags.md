@@ -177,30 +177,30 @@ The syntax is `Type<SubType, OtherSubType, ...>`. For instance, an Array might
 contain only String objects, in which case the type specification would be
 `Array<String>`. Multiple parametrized types can be listed, separated by commas.
 
-Note that parametrized types are typically not order-dependent, in other words,
-a list of parametrized types can occur in any order inside of a type. An array
-specified as `Array<String, Fixnum>` can contain any amount of Strings or Fixnums,
-in any order. When the order matters, use "order-dependent lists", described below.
+A given type may treat its `<...>` parameters as an implicit union, meaning
+"any of these" - `Array` and `Set` do, so `Array<String, Fixnum>` can contain
+any amount of Strings or Fixnums, in any order - or as distinct, positional
+roles instead, in which case order matters (for instance,
+`Result<Success, Failure>` - `Success` and `Failure` are not "either of
+these", they're two different roles). Either way, this is still different
+from an "order-dependent list" (described below), which asserts an exact
+sequence of elements rather than naming parameter roles.
 
 The type name before `<...>` can be omitted, in which case it defaults to
 `Array`: `<String, Fixnum>` means the same thing as `Array<String, Fixnum>`.
 
-Note that `Foo<A, B>` is used two different ways in practice, and YARD has no
-syntax for a class to declare which one it means: `A, B` can be a list of
-alternative element types for a homogeneous collection (as with `Array` and
-`Set` above), or it can be a list of a generic class's distinct, positional
-type-parameter roles (for instance, `Result<Success, Failure>` - `Success`
-and `Failure` are not "either of these", they're two different roles). Since
-there's no way to tell these apart from the syntax alone, only `Array` and
-`Set` are treated as the first (implicit-union) kind; any other name with
-two or more parameters is described neutrally, without asserting either
-reading, e.g. `Result<Success, Failure>` reads as "a Result with type
-parameters (a Success, a Failure)". A single parameter is never ambiguous
-(there's nothing to distinguish a union from a positional role when there's
-only one), so it's unaffected either way. `Hash<KeyType, ValueType>` is a
-special case with its own dedicated positional meaning (slot 1 is the key
-type, slot 2 is the value type), matching the `Hash{KeyType=>ValueType}`
+Only `Array` and `Set` are treated as the implicit-union kind; any other
+name with two or more parameters is described neutrally, without asserting
+either reading, e.g. `Result<Success, Failure>` reads as "a Result with
+type parameters (a Success, a Failure)". A single parameter is never
+ambiguous (there's nothing to distinguish a union from a positional role
+when there's only one), so it's unaffected either way. `Hash<KeyType, ValueType>`
+is a special case with its own dedicated positional meaning (slot 1 is the
+key type, slot 2 is the value type), matching the `Hash{KeyType=>ValueType}`
 syntax described below - not an implicit union of "KeyTypes or ValueTypes".
+Since `|` always means union, using it inside a non-implicit-union `<...>`
+(anything other than `Array`/`Set`) is a syntax error rather than being
+silently accepted; use `,` there instead.
 
 #### Duck-Types
 
@@ -225,13 +225,12 @@ inherit from `Foo` and respond to `#bar` would be listed as `Foo & #bar`.
     # @param value [String & Comparable] the value to accept
     def accept(value) end
 
-`&` binds tighter than `,`, so `Foo & Bar, Baz` means `(Foo & Bar), Baz`: a
-value that is either "both a Foo and a Bar" or "a Baz". Use `&` again to
-intersect the same list on both sides of a `,` if that's what you mean:
-`Foo & Bar, Baz & Qux`. `&` is legal in every position a type can appear -
-top level, inside `<...>`, `(...)`, or `{...}` - and always binds tighter
-than whatever separator surrounds it; see [Operator Precedence](#Operator_Precedence)
-below.
+`&` is legal in every position a type can appear - top level, inside
+`<...>`, `(...)`, `{...}`, or `[...]` - and always binds tighter than
+whatever separator surrounds it, so a bare `Foo & Bar` never needs extra
+punctuation to keep it together. See
+[Operator Precedence](#Operator_Precedence) below for the full rules and
+worked examples.
 
 #### Hashes
 
@@ -326,20 +325,26 @@ different depending on where it's used, so here's how they combine:
 
 * `&` always binds tighter than whichever separator surrounds it - `,` or
   `|` at the top level, or the current slot's `|` inside `(...)`.
-  `Foo & Bar, Baz` means `(Foo & Bar), Baz`, and
-  `Array(Foo & Bar | Baz, Qux)` means `Array((Foo & Bar) | Baz, Qux)` - a
-  2-element Array whose first slot is `(Foo & Bar) or Baz` - not
-  `Foo & (Bar, Baz)` or `Foo & (Bar | Baz)`.
-* `,` and `|` are synonyms everywhere - top level, `<...>`, `{...}`, and
-  `[...]` - except directly inside `(...)`, where `,` means "next slot" and
-  `|` means "either of these, for this slot only." Reusing `,` for the
-  latter would only ever mean "next slot," which is why `[...]` (or a bare
-  `|`) exists at all.
+  `Foo & Bar, Baz` means the same thing as `[Foo & Bar], Baz`, and
+  `Array(Foo & Bar | Baz, Qux)` means the same thing as
+  `Array([Foo & Bar] | Baz, Qux)` - a 2-element Array whose first slot is
+  either both a Foo and a Bar, or a Baz - not `Foo & [Bar, Baz]` or
+  `Foo & [Bar | Baz]`.
+* `,` and `|` are synonyms everywhere a union is legal - top level,
+  `{...}`, `[...]`, and inside `<...>` for the types whose parameters are
+  an implicit union (`Array`/`Set`; see
+  [Parametrized Types](#Parametrized_Types) above) - except directly
+  inside `(...)`, where `,` means "next slot" and `|` means "either of
+  these, for this slot only." Reusing `,` for the latter would only ever
+  mean "next slot," which is why `[...]` (or a bare `|`) exists at all.
+  For any other `<...>` type, whose parameters are positional roles
+  rather than a union, `|` isn't meaningful there and is a syntax error;
+  use `,`.
 * `[...]` groups a union for use as one conjunct of a top-level
   intersection, in either order: `[Foo | Bar] & Baz` and
   `Baz & [Foo | Bar]`. Without it, `Foo | Bar & Baz` is just `,` at the top
   level (two independent items, `Foo` and `Bar & Baz`), not
-  `(Foo | Bar) & Baz`.
+  `[Foo | Bar] & Baz`.
 
 #### Literals
 

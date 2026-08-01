@@ -227,7 +227,7 @@ module YARD
           :symbol => /:#{METHODNAMEMATCH}/,
           :type_next => /[,]/,
           :intersect => /&/,
-          :union_sep => /\|/,
+          :union => /\|/,
           :whitespace => /\s+/,
           :hash_collection_start => /\{/,
           :hash_collection_value => /=>/,
@@ -284,8 +284,12 @@ module YARD
         #   independent top-level item instead: `[A | B] & C` groups `A`
         #   and `B` before intersecting with `C`, where `A | B & C` would
         #   parse as the two top-level items `A` and `B & C`.
-        # @return [Array(Array<Type>, Symbol)] the parsed types and the
-        #   token that ended the list
+        # @return [Array(Array<Type>, Symbol, Boolean)] the parsed types,
+        #   the token that ended the list, and whether `|` appeared as a
+        #   direct separator at this nesting level (not inside a nested
+        #   list) - used by callers that need to know whether `|` was used
+        #   somewhere it has no union meaning, like a non-implicit-union
+        #   `<...>`
         def parse_until(until_tokens, slot_pipe: false)
           current_parsed_types = []
           type = nil
@@ -294,6 +298,7 @@ module YARD
           end_token = nil
           intersection_conjuncts = []
           slot_conjuncts = []
+          used_union = false
           types = parse_with_handlers do |token_type, token|
             case token_type
             when *until_tokens
@@ -325,8 +330,9 @@ module YARD
               slot_conjuncts = []
               name = nil
               type = nil
-            when :union_sep
+            when :union
               raise SyntaxError, "expecting name, got '|' at #{@scanner.pos}" if name.nil?
+              used_union = true
               type = create_type(name) unless type
               combined = finish_intersection(intersection_conjuncts, type)
               intersection_conjuncts = []
@@ -340,13 +346,17 @@ module YARD
             when :fixed_collection_start, :collection_start
               is_fixed = token_type == :fixed_collection_start
               name ||= "Array"
-              nested_types, = parse_until([:fixed_collection_end, :collection_end, :parse_end], slot_pipe: is_fixed)
+              nested_types, _, used_pipe = parse_until(
+                [:fixed_collection_end, :collection_end, :parse_end], slot_pipe: is_fixed
+              )
               type = if is_fixed
                 FixedCollectionType.new(name, nested_types)
               elsif name == "Hash" && nested_types.size == 2
                 # `Hash<KeyType, ValueType>` is documented as positional
                 # (slot 0 = key type, slot 1 = value type), matching the
                 # dedicated `Hash{K=>V}` syntax - not an implicit union.
+                raise SyntaxError, "'|' has no meaning in Hash<KeyType, ValueType> - " \
+                  "its parameters are positional, not a union; use ',' instead" if used_pipe
                 HashCollectionType.new(name, [nested_types[0]], [nested_types[1]])
               elsif nested_types.size <= 1 || UNION_COLLECTION_NAMES.include?(name)
                 # A single slot is never ambiguous (nothing to distinguish
@@ -358,7 +368,11 @@ module YARD
                 # collection's element type(s), or a class's distinct
                 # positional type-parameter roles - and YARD has no way to
                 # know which one an arbitrary class means. Don't assert
-                # union for a name we don't specifically know means that.
+                # union for a name we don't specifically know means that,
+                # and don't silently accept '|' - which always means
+                # union - somewhere it wouldn't be honored.
+                raise SyntaxError, "'|' has no meaning in #{name}<...> - only Array/Set " \
+                  "treat their type parameters as a union; use ',' instead" if used_pipe
                 ParametrizedType.new(name, nested_types)
               end
             when :group_start
@@ -373,7 +387,7 @@ module YARD
 
             [finished, current_parsed_types]
           end
-          [types, end_token]
+          [types, end_token, used_union]
         end
 
         # @return [Array<Type>]
@@ -427,7 +441,7 @@ module YARD
               intersection_conjuncts << key_type
               key_name = nil
               key_type = nil
-            when :type_next, :union_sep
+            when :type_next, :union
               # ',' and '|' are synonyms here, as everywhere outside '(...)'
               raise SyntaxError, "expecting name, got '#{token}' at #{@scanner.pos}" if key_name.nil?
               finalize_key.call

@@ -278,6 +278,20 @@ RSpec.describe YARD::Tags::TypesExplainer do
       expect(type.first).to be_a(YARD::Tags::TypesExplainer::CollectionType)
     end
 
+    it "rejects '|' inside a non-allow-listed <...>, since ',' there is positional, not a union" do
+      parse_fail "Result<Success | Failure>"
+    end
+
+    it "rejects '|' inside Hash<KeyType, ValueType>, since its parameters are positional" do
+      parse_fail "Hash<KeyType | OtherKeyType, ValueType>"
+    end
+
+    it "still allows '|' inside allow-listed <...>, where the parameters are a union" do
+      by_comma = parse("Array<Foo, Bar>")
+      by_pipe = parse("Array<Foo | Bar>")
+      expect(by_pipe.first.types.map(&:name)).to eq by_comma.first.types.map(&:name)
+    end
+
     it "allows a collection type without a name" do
       type = parse("<String>")
       expect(type.first.name).to eq "Array"
@@ -497,7 +511,7 @@ RSpec.describe YARD::Tags::TypesExplainer do
       end
     end
 
-    it "treats '|' as a synonym for ',' everywhere except directly inside '(...)'" do
+    it "treats '|' as a synonym for ',' everywhere a union is legal" do
       # '&' never needs '[...]' - it's legal (and binds tightest) everywhere
       expect(YARD::Tags::TypesExplainer.explain("Array<Foo & Bar, Baz>")).to eq(
         "an Array of (Foos and Bars or Bazs)"
@@ -561,6 +575,11 @@ RSpec.describe YARD::Tags::TypesExplainer do
         explain = YARD::Tags::TypesExplainer.explain(input)
         expect(explain).to eq expected.delete("\n").squeeze(' ')
       end
+    end
+
+    it "rejects '|' inside a non-implicit-union '<...>', since it has no union to apply to" do
+      expect(YARD::Tags::TypesExplainer.explain("Result<Success | Failure>")).to be_nil
+      expect(YARD::Tags::TypesExplainer.explain("Hash<KeyType | OtherKeyType, ValueType>")).to be_nil
     end
   end
 end

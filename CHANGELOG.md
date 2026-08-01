@@ -14,7 +14,9 @@
   parameters (A, B)", since `<...>` is also conventionally used for a
   class's distinct positional roles (e.g. `Result<Success, Failure>`).
   `Hash<KeyType, ValueType>` gets its own dedicated positional rendering,
-  matching `Hash{KeyType=>ValueType}`
+  matching `Hash{KeyType=>ValueType}`. Since `|` always means union, using
+  it inside a non-implicit-union `<...>` (anything but `Array`/`Set`) is
+  now a syntax error rather than being silently accepted
 - Fix duplicate "View source" links after client-side navigation in default HTML template
 
 # [0.9.45] - July 14th, 2026
