@@ -4,9 +4,13 @@
   every type listed, rather than any one of them, reading as "both a Foo
   and a Bar" (or "all of a Foo, a Bar, and a Baz" for 3+) to avoid reading
   like two separate values (closes #1644)
-- Add `|` as a second way to write a union (`Foo | Bar`, a synonym for
-  `Foo, Bar` everywhere except directly inside `Array(...)`, where it
-  groups one slot instead) (closes #1699)
+- Add `|` as a union operator (`Foo | Bar` means an object that's either a
+  Foo or a Bar). Type lists that already mean a union - the top level, a
+  hash's key/value lists, `Array<...>`/`Set<...>` - read `,` and `|` the
+  same way; elsewhere, where a comma-separated list means distinct type
+  parameters or tuple slots (`Array(...)`, or `<...>` for a name other
+  than `Array`/`Set`), `|` groups a union within a single one of them
+  (closes #1699)
 - Add `[...]` to group a union into a single type, for use as one slot of
   an order-dependent list or one conjunct of an intersection (closes #1699)
 - Document the existing anonymous `<A>`, `(A)`, and `{A=>B}` shorthand forms
@@ -14,11 +18,9 @@
   homogeneous collections) keep that implicit-union reading; any other
   name with 2+ type parameters now reads neutrally as "with type
   parameters (A, B)", since `<...>` is also conventionally used for a
-  class's distinct positional roles (e.g. `Result<Success, Failure>`).
+  class's distinct type parameters (e.g. `Result<Success, Failure>`).
   `Hash<KeyType, ValueType>` gets its own dedicated positional rendering,
-  matching `Hash{KeyType=>ValueType}`. Since `|` always means union, using
-  it inside a non-implicit-union `<...>` (anything but `Array`/`Set`) is
-  now a syntax error rather than being silently accepted
+  matching `Hash{KeyType=>ValueType}`
 - Fix duplicate "View source" links after client-side navigation in default HTML template
 
 # [0.9.45] - July 14th, 2026

@@ -263,16 +263,15 @@ module YARD
 
         private
 
-        # @param slot_pipe [Boolean] whether `|` means "alternative within
-        #   the current slot" (like `&`, accumulated separately and only
-        #   folded in when a slot ends) rather than a synonym for `,`. Only
-        #   true directly inside `(...)`, YARD's pre-existing
-        #   order-dependent-list syntax: `,` means "next slot" there, so `|`
-        #   can't *also* mean "next slot" without losing its own meaning -
-        #   it keeps meaning "either of these", just scoped to one slot
-        #   instead of the whole list. Everywhere else, `,` and `|` are
-        #   pure synonyms: both simply mean "either of these" for the
-        #   whole list, so either can be used and mixed freely.
+        # @param slot_pipe [Boolean] whether `,` separates positional slots
+        #   (like a fixed tuple's `(...)`, or a `<...>` name that isn't
+        #   known to treat its whole parameter list as a union), in which
+        #   case a bare `|` groups alternatives within a single slot
+        #   instead of adding another top-level item. False for containers
+        #   whose whole comma-separated list already means "any of these"
+        #   (the top level, `{...}`, `[...]`, and a `<...>` name that IS
+        #   known to mean a union) - there, `,` and `|` both just add
+        #   another alternative to that same list.
         #
         # `&` (intersection) is legal anywhere a type is expected (it never
         #   needs this distinction), accumulated via
@@ -288,12 +287,8 @@ module YARD
         #   independent top-level item instead: `[A | B] & C` groups `A`
         #   and `B` before intersecting with `C`, where `A | B & C` would
         #   parse as the two top-level items `A` and `B & C`.
-        # @return [Array(Array<Type>, Symbol, Boolean)] the parsed types,
-        #   the token that ended the list, and whether `|` appeared as a
-        #   direct separator at this nesting level (not inside a nested
-        #   list) - used by callers that need to know whether `|` was used
-        #   somewhere it has no union meaning, like a non-implicit-union
-        #   `<...>`
+        # @return [Array(Array<Type>, Symbol)] the parsed types and the
+        #   token that ended the list
         def parse_until(until_tokens, slot_pipe: false)
           current_parsed_types = []
           type = nil
@@ -302,7 +297,6 @@ module YARD
           end_token = nil
           intersection_conjuncts = []
           slot_conjuncts = []
-          used_union = false
           types = parse_with_handlers do |token_type, token|
             case token_type
             when *until_tokens
@@ -336,7 +330,6 @@ module YARD
               type = nil
             when :union
               raise SyntaxError, "expecting name, got '|' at #{@scanner.pos}" if name.nil?
-              used_union = true
               type = create_type(name) unless type
               combined = finish_intersection(intersection_conjuncts, type)
               intersection_conjuncts = []
@@ -350,8 +343,17 @@ module YARD
             when :fixed_collection_start, :collection_start
               is_fixed = token_type == :fixed_collection_start
               name ||= "Array"
-              nested_types, _, used_pipe = parse_until(
-                [:fixed_collection_end, :collection_end, :parse_end], slot_pipe: is_fixed
+              # A fixed tuple's slots are always positional, and so is a
+              # `<...>` name that isn't known to treat its whole parameter
+              # list as a union (see UNION_COLLECTION_NAMES): `,` separates
+              # slots, and `|` groups alternatives within a single slot
+              # (the same behavior `finish_group` already gives `(...)`).
+              # A name that IS known to mean a union (Array, Set) instead
+              # treats its whole comma/pipe-separated list as one flat set
+              # of alternatives.
+              slot_pipe = is_fixed || !UNION_COLLECTION_NAMES.include?(name)
+              nested_types, = parse_until(
+                [:fixed_collection_end, :collection_end, :parse_end], slot_pipe: slot_pipe
               )
               type = if is_fixed
                 FixedCollectionType.new(name, nested_types)
@@ -359,8 +361,6 @@ module YARD
                 # `Hash<KeyType, ValueType>` is documented as positional
                 # (slot 0 = key type, slot 1 = value type), matching the
                 # dedicated `Hash{K=>V}` syntax - not an implicit union.
-                raise SyntaxError, "'|' has no meaning in Hash<KeyType, ValueType> - " \
-                  "its parameters are positional, not a union; use ',' instead" if used_pipe
                 HashCollectionType.new(name, [nested_types[0]], [nested_types[1]])
               elsif nested_types.size <= 1 || UNION_COLLECTION_NAMES.include?(name)
                 # A single slot is never ambiguous (nothing to distinguish
@@ -372,11 +372,7 @@ module YARD
                 # collection's element type(s), or a class's distinct
                 # positional type-parameter roles - and YARD has no way to
                 # know which one an arbitrary class means. Don't assert
-                # union for a name we don't specifically know means that,
-                # and don't silently accept '|' - which always means
-                # union - somewhere it wouldn't be honored.
-                raise SyntaxError, "'|' has no meaning in #{name}<...> - only Array/Set " \
-                  "treat their type parameters as a union; use ',' instead" if used_pipe
+                # union for a name we don't specifically know means that.
                 ParameterizedType.new(name, nested_types)
               end
             when :group_start
@@ -391,7 +387,7 @@ module YARD
 
             [finished, current_parsed_types]
           end
-          [types, end_token, used_union]
+          [types, end_token]
         end
 
         # @return [Array<Type>]

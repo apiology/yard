@@ -278,15 +278,24 @@ RSpec.describe YARD::Tags::TypesExplainer do
       expect(type.first).to be_a(YARD::Tags::TypesExplainer::CollectionType)
     end
 
-    it "rejects '|' inside a non-allow-listed <...>, since ',' there is positional, not a union" do
-      parse_fail "Result<Success | Failure>"
+    it "groups '|' within a single slot of a non-allow-listed <...>, since its slots are positional" do
+      type = parse("Result<Success | Failure, Other>")
+      expect(type.first).to be_a(YARD::Tags::TypesExplainer::ParameterizedType)
+      expect(type.first.types.size).to eq 2
+      expect(type.first.types.first).to be_a(YARD::Tags::TypesExplainer::GroupType)
+      expect(type.first.types.first.types.map(&:name)).to eq ["Success", "Failure"]
+      expect(type.first.types.last.name).to eq "Other"
     end
 
-    it "rejects '|' inside Hash<KeyType, ValueType>, since its parameters are positional" do
-      parse_fail "Hash<KeyType | OtherKeyType, ValueType>"
+    it "groups '|' within a slot of Hash<KeyType, ValueType>, since its slots are positional" do
+      type = parse("Hash<KeyType | OtherKeyType, ValueType>")
+      expect(type.first).to be_a(YARD::Tags::TypesExplainer::HashCollectionType)
+      expect(type.first.key_types.size).to eq 1
+      expect(type.first.key_types.first).to be_a(YARD::Tags::TypesExplainer::GroupType)
+      expect(type.first.key_types.first.types.map(&:name)).to eq ["KeyType", "OtherKeyType"]
     end
 
-    it "still allows '|' inside allow-listed <...>, where the parameters are a union" do
+    it "still treats '|' as a flat alternative inside allow-listed <...>, where the whole list is a union" do
       by_comma = parse("Array<Foo, Bar>")
       by_pipe = parse("Array<Foo | Bar>")
       expect(by_pipe.first.types.map(&:name)).to eq by_comma.first.types.map(&:name)
@@ -577,9 +586,10 @@ RSpec.describe YARD::Tags::TypesExplainer do
       end
     end
 
-    it "rejects '|' inside a non-implicit-union '<...>', since it has no union to apply to" do
-      expect(YARD::Tags::TypesExplainer.explain("Result<Success | Failure>")).to be_nil
-      expect(YARD::Tags::TypesExplainer.explain("Hash<KeyType | OtherKeyType, ValueType>")).to be_nil
+    it "groups '|' within a slot of a non-implicit-union '<...>', instead of unioning the whole list" do
+      expect(YARD::Tags::TypesExplainer.explain("Result<Success | Failure, Other>")).to eq(
+        "a Result with type parameters ((a Success or a Failure), an Other)"
+      )
     end
   end
 end
