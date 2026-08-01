@@ -127,7 +127,19 @@ module YARD
         end
 
         def to_s(_singular = true)
-          "a#{name[0, 1] =~ /[aeiou]/i ? 'n' : ''} #{name} of (" + list_join(types.map {|t| t.to_s(false) }) + ")"
+          "a#{name[0, 1] =~ /[aeiou]/i ? 'n' : ''} #{name} of (" + list_join(flattened_types.map {|t| t.to_s(false) }) + ")"
+        end
+
+        private
+
+        # A parsed type parameter that's itself a union (from `Foo | Bar`
+        # in e.g. `Array<Foo | Bar, Baz>`) is a {GroupType}. Since this
+        # whole parameter list is already read as one flat union, absorb
+        # such a parameter's own members into that same list instead of
+        # rendering it as a nested, parenthesized sub-union - the two mean
+        # the same thing here.
+        def flattened_types
+          types.flat_map {|t| t.is_a?(GroupType) ? t.types : [t] }
         end
       end
 
@@ -263,14 +275,13 @@ module YARD
 
         private
 
-        # @param slot_pipe [Boolean] whether `,` separates positional slots
-        #   (like a fixed tuple's `(...)`, or a `<...>` name that isn't
-        #   known to treat its whole parameter list as a union), in which
-        #   case a bare `|` groups alternatives within a single slot
-        #   instead of adding another top-level item. False for containers
-        #   whose whole comma-separated list already means "any of these"
-        #   (the top level, `{...}`, `[...]`, and a `<...>` name that IS
-        #   known to mean a union) - there, `,` and `|` both just add
+        # @param slot_pipe [Boolean] whether `,` separates positional type
+        #   parameters/slots (a fixed tuple's `(...)`, or a parameterized
+        #   type's `<...>`), in which case a bare `|` groups alternatives
+        #   within a single one of them instead of adding another
+        #   top-level item. False for containers whose whole
+        #   comma-separated list already means "any of these" (the top
+        #   level, `{...}`, and `[...]`) - there, `,` and `|` both just add
         #   another alternative to that same list.
         #
         # `&` (intersection) is legal anywhere a type is expected (it never
@@ -343,17 +354,16 @@ module YARD
             when :fixed_collection_start, :collection_start
               is_fixed = token_type == :fixed_collection_start
               name ||= "Array"
-              # A fixed tuple's slots are always positional, and so is a
-              # `<...>` name that isn't known to treat its whole parameter
-              # list as a union (see UNION_COLLECTION_NAMES): `,` separates
-              # slots, and `|` groups alternatives within a single slot
-              # (the same behavior `finish_group` already gives `(...)`).
-              # A name that IS known to mean a union (Array, Set) instead
-              # treats its whole comma/pipe-separated list as one flat set
-              # of alternatives.
-              slot_pipe = is_fixed || !UNION_COLLECTION_NAMES.include?(name)
+              # Both a fixed tuple's `(...)` and a parameterized type's
+              # `<...>` treat `,` as separating positional type parameters,
+              # and a bare `|` as grouping alternatives within just one of
+              # them (`finish_group`) - parsing doesn't need to know
+              # whether `name` means an implicit union. Whether a name's
+              # type parameters get described as a union (Array, Set) or
+              # neutrally (everything else) is purely a rendering choice,
+              # made below.
               nested_types, = parse_until(
-                [:fixed_collection_end, :collection_end, :parse_end], slot_pipe: slot_pipe
+                [:fixed_collection_end, :collection_end, :parse_end], slot_pipe: true
               )
               type = if is_fixed
                 FixedCollectionType.new(name, nested_types)

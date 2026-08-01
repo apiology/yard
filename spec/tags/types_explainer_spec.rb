@@ -143,6 +143,12 @@ RSpec.describe YARD::Tags::TypesExplainer do
       @t.types = [described_class.new("List", [type("Object")])]
       expect(@t.to_s).to eq "an Array of (a List of (Objects))"
     end
+
+    it "flattens a GroupType member into its own union list" do
+      group = YARD::Tags::TypesExplainer::GroupType.new([type("Foo"), type("Bar")])
+      @t.types = [group, type("Baz")]
+      expect(@t.to_s).to eq "an Array of (Foos, Bars or Bazs)"
+    end
   end
 
   describe YARD::Tags::TypesExplainer::ParameterizedType, '#to_s' do
@@ -295,10 +301,19 @@ RSpec.describe YARD::Tags::TypesExplainer do
       expect(type.first.key_types.first.types.map(&:name)).to eq ["KeyType", "OtherKeyType"]
     end
 
-    it "still treats '|' as a flat alternative inside allow-listed <...>, where the whole list is a union" do
-      by_comma = parse("Array<Foo, Bar>")
-      by_pipe = parse("Array<Foo | Bar>")
-      expect(by_pipe.first.types.map(&:name)).to eq by_comma.first.types.map(&:name)
+    it "parses '|' within a slot of an allow-listed <...>, mixed with ','" do
+      type = parse("Array<Foo | Bar, Baz>")
+      expect(type.first).to be_a(YARD::Tags::TypesExplainer::CollectionType)
+      expect(type.first.types.size).to eq 2
+      expect(type.first.types.first).to be_a(YARD::Tags::TypesExplainer::GroupType)
+      expect(type.first.types.first.types.map(&:name)).to eq ["Foo", "Bar"]
+      expect(type.first.types.last.name).to eq "Baz"
+    end
+
+    it "still renders '|' as a flat alternative inside allow-listed <...>, where the whole list is a union" do
+      by_comma = YARD::Tags::TypesExplainer.explain("Array<Foo, Bar>")
+      by_pipe = YARD::Tags::TypesExplainer.explain("Array<Foo | Bar>")
+      expect(by_pipe).to eq by_comma
     end
 
     it "allows a collection type without a name" do
@@ -333,7 +348,7 @@ RSpec.describe YARD::Tags::TypesExplainer do
     it "treats '|' as a synonym for ',' inside a collection type" do
       type = parse("Array<String | Symbol>")
       expect(type.first).to be_a(YARD::Tags::TypesExplainer::CollectionType)
-      expect(type.first.types.map(&:name)).to eq ["String", "Symbol"]
+      expect(type.first.to_s).to eq "an Array of (Strings or Symbols)"
     end
 
     it "allows a grouped union as a fixed-tuple slot via square brackets" do
