@@ -140,7 +140,7 @@ module YARD
       # e.g. `Result<Success, Failure>`), and there's no way for YARD to
       # know which one a given class means. This is the honest fallback
       # for any name not specifically known to mean the former.
-      class ParametrizedType < Type
+      class ParameterizedType < Type
         attr_accessor :types
 
         def initialize(name, types)
@@ -377,7 +377,7 @@ module YARD
                 # union - somewhere it wouldn't be honored.
                 raise SyntaxError, "'|' has no meaning in #{name}<...> - only Array/Set " \
                   "treat their type parameters as a union; use ',' instead" if used_pipe
-                ParametrizedType.new(name, nested_types)
+                ParameterizedType.new(name, nested_types)
               end
             when :group_start
               raise SyntaxError, "'[' cannot follow a type name" if name

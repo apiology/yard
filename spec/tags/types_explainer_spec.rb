@@ -145,10 +145,10 @@ RSpec.describe YARD::Tags::TypesExplainer do
     end
   end
 
-  describe YARD::Tags::TypesExplainer::ParametrizedType, '#to_s' do
+  describe YARD::Tags::TypesExplainer::ParameterizedType, '#to_s' do
     it "lists type parameters without pluralizing or asserting union/order" do
-      parametrized = described_class.new("Result", [type("Success"), type("Failure")])
-      expect(parametrized.to_s).to eq "a Result with type parameters (a Success, a Failure)"
+      parameterized = described_class.new("Result", [type("Success"), type("Failure")])
+      expect(parameterized.to_s).to eq "a Result with type parameters (a Success, a Failure)"
     end
   end
 
@@ -256,9 +256,9 @@ RSpec.describe YARD::Tags::TypesExplainer do
       expect(type.first).to be_a(YARD::Tags::TypesExplainer::CollectionType)
     end
 
-    it "uses ParametrizedType for a non-allow-listed name with 2+ parameters" do
+    it "uses ParameterizedType for a non-allow-listed name with 2+ parameters" do
       type = parse("Result<Success, Failure>")
-      expect(type.first).to be_a(YARD::Tags::TypesExplainer::ParametrizedType)
+      expect(type.first).to be_a(YARD::Tags::TypesExplainer::ParameterizedType)
       expect(type.first.name).to eq "Result"
       expect(type.first.types.map(&:name)).to eq ["Success", "Failure"]
     end
@@ -271,9 +271,9 @@ RSpec.describe YARD::Tags::TypesExplainer do
       expect(by_angle_brackets.first.value_types.map(&:name)).to eq by_braces.first.value_types.map(&:name)
     end
 
-    it "falls back to ParametrizedType for Hash<...> with the wrong number of parameters" do
+    it "falls back to ParameterizedType for Hash<...> with the wrong number of parameters" do
       type = parse("Hash<A, B, C>")
-      expect(type.first).to be_a(YARD::Tags::TypesExplainer::ParametrizedType)
+      expect(type.first).to be_a(YARD::Tags::TypesExplainer::ParameterizedType)
       type = parse("Hash<A>")
       expect(type.first).to be_a(YARD::Tags::TypesExplainer::CollectionType)
     end

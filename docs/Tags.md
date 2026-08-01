@@ -169,37 +169,38 @@ Note that one extra type that is accepted by convention is the `Boolean` type,
 which represents both the `TrueClass` and `FalseClass` types. This type does not
 exist in Ruby, however.
 
-#### Parametrized Types
+#### Parameterized Types
 
 In addition to basic types (like String or Array), YARD conventions allow for
-a "generics" like syntax to specify container objects or other parametrized types.
+a "generics" like syntax to specify container objects or other parameterized types.
 The syntax is `Type<SubType, OtherSubType, ...>`. For instance, an Array might
 contain only String objects, in which case the type specification would be
-`Array<String>`. Multiple parametrized types can be listed, separated by commas.
+`Array<String>`. Multiple parameterized types can be listed, separated by commas.
 
 A given type may treat its `<...>` parameters as an implicit union, meaning
-"any of these" - `Array` and `Set` do, so `Array<String, Fixnum>` can contain
-any amount of Strings or Fixnums, in any order - or as distinct, positional
-roles instead, in which case order matters (for instance,
-`Result<Success, Failure>` - `Success` and `Failure` are not "either of
-these", they're two different roles). Either way, this is still different
+"any of these", or as distinct, positional roles instead, in which case
+order matters. For instance, `Array<String, Fixnum>` can contain any
+amount of Strings or Fixnums, in any order, while in
+`Result<Success, Failure>`, `Success` and `Failure` are not "either of
+these" - they're two different roles. Either way, this is still different
 from an "order-dependent list" (described below), which asserts an exact
 sequence of elements rather than naming parameter roles.
 
 The type name before `<...>` can be omitted, in which case it defaults to
 `Array`: `<String, Fixnum>` means the same thing as `Array<String, Fixnum>`.
 
-Only `Array` and `Set` are treated as the implicit-union kind; any other
-name with two or more parameters is described neutrally, without asserting
-either reading, e.g. `Result<Success, Failure>` reads as "a Result with
-type parameters (a Success, a Failure)". A single parameter is never
-ambiguous (there's nothing to distinguish a union from a positional role
-when there's only one), so it's unaffected either way. `Hash<KeyType, ValueType>`
-is a special case with its own dedicated positional meaning (slot 1 is the
-key type, slot 2 is the value type), matching the `Hash{KeyType=>ValueType}`
+`Array` and `Set` are examples of types whose parameters are known to be
+an implicit union; any other name with two or more parameters is
+described neutrally, without asserting either reading, e.g.
+`Result<Success, Failure>` reads as "a Result with type parameters (a
+Success, a Failure)". A single parameter is never ambiguous (there's
+nothing to distinguish a union from a positional role when there's only
+one), so it's unaffected either way. `Hash<KeyType, ValueType>` is a
+special case with its own dedicated positional meaning (slot 1 is the key
+type, slot 2 is the value type), matching the `Hash{KeyType=>ValueType}`
 syntax described below - not an implicit union of "KeyTypes or ValueTypes".
-Since `|` always means union, using it inside a non-implicit-union `<...>`
-(anything other than `Array`/`Set`) is a syntax error rather than being
+Since `|` always means union, using it inside a `<...>` type whose
+parameters aren't known to be a union is a syntax error rather than being
 silently accepted; use `,` there instead.
 
 #### Duck-Types
@@ -225,16 +226,15 @@ inherit from `Foo` and respond to `#bar` would be listed as `Foo & #bar`.
     # @param value [String & Comparable] the value to accept
     def accept(value) end
 
-`&` is legal in every position a type can appear - top level, inside
-`<...>`, `(...)`, `{...}`, or `[...]` - and always binds tighter than
-whatever separator surrounds it, so a bare `Foo & Bar` never needs extra
-punctuation to keep it together. See
+`&` is legal in every position a type can appear, and always binds tighter
+than whatever separator surrounds it, so a bare `Foo & Bar` never needs
+extra punctuation to keep it together. See
 [Operator Precedence](#Operator_Precedence) below for the full rules and
 worked examples.
 
 #### Hashes
 
-Hashes can be specified either via the parametrized type discussed above,
+Hashes can be specified either via the parameterized type discussed above,
 in the form `Hash<KeyType, ValueType>`, or using the hash specific syntax:
 `Hash{KeyTypes=>ValueTypes}`. In the latter case, KeyTypes or ValueTypes can
 also be a list of types separated by commas.
@@ -333,7 +333,7 @@ different depending on where it's used, so here's how they combine:
 * `,` and `|` are synonyms everywhere a union is legal - top level,
   `{...}`, `[...]`, and inside `<...>` for the types whose parameters are
   an implicit union (`Array`/`Set`; see
-  [Parametrized Types](#Parametrized_Types) above) - except directly
+  [Parameterized Types](#Parameterized_Types) above) - except directly
   inside `(...)`, where `,` means "next slot" and `|` means "either of
   these, for this slot only." Reusing `,` for the latter would only ever
   mean "next slot," which is why `[...]` (or a bare `|`) exists at all.
