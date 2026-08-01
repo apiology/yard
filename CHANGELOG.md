@@ -11,8 +11,9 @@
   parameters or tuple slots (`Array(...)`, or `<...>` for a name other
   than `Array`/`Set`), `|` groups a union within a single one of them
   (closes #1699)
-- Add `[...]` to group a union into a single type, for use as one slot of
-  an order-dependent list or one conjunct of an intersection (closes #1699)
+- Add `[...]`, used the same way parentheses are in algebra: to override
+  the default order of operations, e.g. to use a union as one conjunct of
+  an intersection (closes #1699)
 - Document the existing anonymous `<A>`, `(A)`, and `{A=>B}` shorthand forms
 - Stop assuming `Foo<A, B>` always means "A or B": only `Array`/`Set` (known
   homogeneous collections) keep that implicit-union reading; any other

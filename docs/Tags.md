@@ -273,7 +273,7 @@ A single slot can itself be a union: `Array(Integer | String, Symbol)` is a
 
 Some type lists already mean a union without `|` - a plain comma-separated
 list at the top level, a hash's key or value list, inside `[...]`
-(described next), and inside `Array<...>`/`Set<...>`. In those places `,`
+(described below), and inside `Array<...>`/`Set<...>`. In those places `,`
 and `|` come to the same thing, so use whichever reads better:
 `Integer, String` and `Integer | String` describe the same type.
 
@@ -286,41 +286,36 @@ single item to say it can be any of several types:
 is an Integer or a String, and `Result<Success | Failure, Other>` is a
 Result whose first type parameter is a Success or a Failure.
 
-#### Grouping
+#### Operator Precedence
 
-Just like parentheses in algebra, `[...]` groups an expression into a
-single type, letting you control how it combines with the types around
-it - here, that expression is a union, written with either `,` or `|`.
-For example, grouping a union lets it be used as one conjunct of an
-intersection, where a bare union would otherwise have no way to mark
-where it ends: `[Integer | String] & Comparable`.
+`&`, `,`, and `|` can all appear in the same type, and `&` always binds
+tighter than the union or slot separator around it: `Foo & Bar, Baz` means
+either both a Foo and a Bar, or a Baz - not `Foo`, unioned with `Bar & Baz`.
+
+#### Overriding the Order of Operations
+
+Square brackets `[...]` are used the same way parentheses are in algebra:
+to override the order of operations described above. Types inside `[...]`
+are combined first; hence `[Foo | Bar] & Baz` describes a value that's
+either a Foo or a Bar, and also a Baz - not `Foo`, unioned with
+`Bar & Baz`. Without the brackets, `&` binds tighter than the union
+around it, so `Foo | Bar & Baz` means the latter.
+
+Inside `[...]`, `,` and `|` both mean a union, so `[Foo, Bar]` and
+`[Foo | Bar]` describe the same type.
 
 <p class="note">
   This <code>[...]</code> is unrelated to the <code>[Types]</code> brackets
   that delimit a tag's whole <a href="#Types_Specifier_List">types
   specifier list</a> - that outer bracket is tag punctuation, not part of
   any individual type. <code>[...]</code> as described here only has
-  meaning <em>inside</em> a type, e.g. as one slot of
-  <code>Array(...)</code> or one conjunct of an intersection.
+  meaning <em>inside</em> a type.
 </p>
 
 `[...]` never takes a preceding type name - `[Integer | String]` alone
 just means "an Integer or a String," identical in meaning to the plain
 top-level list `Integer, String`, just usable in more places. It can nest
 inside itself (`[[Foo | Bar] | Baz]`).
-
-#### Operator Precedence
-
-`&`, `,`, and `|` can all appear in the same type, so here's how they
-combine:
-
-* `&` always binds tighter than the union or slot separator around it:
-  `Foo & Bar, Baz` means the same thing as `[Foo & Bar], Baz` - either
-  both a Foo and a Bar, or a Baz.
-* `[...]` groups a union for use as one conjunct of an intersection, in
-  either order: `[Foo | Bar] & Baz` and `Baz & [Foo | Bar]`. Without it,
-  `Foo | Bar & Baz` is just a plain list at the top level (two independent
-  items, `Foo` and `Bar & Baz`), not `[Foo | Bar] & Baz`.
 
 #### Literals
 
