@@ -75,13 +75,13 @@ RSpec.describe YARD::Tags::TypesExplainer do
   describe YARD::Tags::TypesExplainer::IntersectionType, '#to_s' do
     it "works for two types" do
       intersection = described_class.new([type("Foo"), type("Bar")])
-      expect(intersection.to_s).to eq "a Foo and a Bar"
-      expect(intersection.to_s(false)).to eq "Foos and Bars"
+      expect(intersection.to_s).to eq "both a Foo and a Bar"
+      expect(intersection.to_s(false)).to eq "both Foos and Bars"
     end
 
     it "works for more than two types" do
       intersection = described_class.new([type("Foo"), type("Bar"), type("Baz")])
-      expect(intersection.to_s).to eq "a Foo, a Bar and a Baz"
+      expect(intersection.to_s).to eq "all of a Foo, a Bar and a Baz"
     end
   end
 
@@ -100,7 +100,7 @@ RSpec.describe YARD::Tags::TypesExplainer do
     it "adds defensive parens around an IntersectionType member" do
       intersection = YARD::Tags::TypesExplainer::IntersectionType.new([type("Foo"), type("Bar")])
       group = described_class.new([intersection, type("Baz")])
-      expect(group.to_s).to eq "((a Foo and a Bar) or a Baz)"
+      expect(group.to_s).to eq "((both a Foo and a Bar) or a Baz)"
     end
 
     it "adds defensive parens around a multi-method DuckType member" do
@@ -443,18 +443,18 @@ RSpec.describe YARD::Tags::TypesExplainer do
 
     it "parses intersection types (`&`)" do
       expect = {
-        "Foo & Bar" => "a Foo and a Bar",
-        "Foo & Bar & Baz" => "a Foo, a Bar and a Baz",
-        "Array<Foo & Bar>" => "an Array of (Foos and Bars)",
+        "Foo & Bar" => "both a Foo and a Bar",
+        "Foo & Bar & Baz" => "all of a Foo, a Bar and a Baz",
+        "Array<Foo & Bar>" => "an Array of (both Foos and Bars)",
         # `&` binds tighter than `,`, matching RBS's `A & B | C` == `(A & B) | C`
-        "Foo & Bar, Baz & Qux" => "a Foo and a Bar; a Baz and a Qux",
-        "Foo, Bar & Baz" => "a Foo; a Bar and a Baz",
+        "Foo & Bar, Baz & Qux" => "both a Foo and a Bar; both a Baz and a Qux",
+        "Foo, Bar & Baz" => "a Foo; both a Bar and a Baz",
         # consecutive duck-types joined by `&` collapse into a single duck-type,
         # matching the pre-existing "#method_one & #method_two" convention
         "#read & #write" => "an object that responds to #read and #write",
         "#read&#write&#close" => "an object that responds to #read, #write and #close",
         # a duck-type intersected with a real type stays a full intersection
-        "Foo & #read" => "a Foo and an object that responds to #read"
+        "Foo & #read" => "both a Foo and an object that responds to #read"
       }
       expect.each do |input, expected|
         explain = YARD::Tags::TypesExplainer.explain(input)
@@ -482,16 +482,16 @@ RSpec.describe YARD::Tags::TypesExplainer do
     it "composes `&` and `[A | B]` together, with `&` binding tighter than `|`" do
       expect = {
         # a group used as one conjunct of an intersection
-        "[Integer | String] & Comparable" => "(an Integer or a String) and a Comparable",
-        "Comparable & [Integer | String]" => "a Comparable and (an Integer or a String)",
+        "[Integer | String] & Comparable" => "both (an Integer or a String) and a Comparable",
+        "Comparable & [Integer | String]" => "both a Comparable and (an Integer or a String)",
         # `&` binds tighter than `|` *inside* a group too, matching how it
         # already binds tighter than `,` everywhere else: `A & B | C` inside
         # `[...]` groups parses as `(A & B) | C`, not `A & (B | C)`. The
         # `&`-joined conjunct has no punctuation of its own to mark where it
         # ends, so the group adds defensive parens around it (only) to keep
         # the English rendering unambiguous, matching the real parse tree.
-        "[Foo & Bar | Baz]" => "((a Foo and a Bar) or a Baz)",
-        "[Foo | Bar & Baz]" => "(a Foo or (a Bar and a Baz))",
+        "[Foo & Bar | Baz]" => "((both a Foo and a Bar) or a Baz)",
+        "[Foo | Bar & Baz]" => "(a Foo or (both a Bar and a Baz))",
         # duck-types inside a group are NOT collapsed the way `&`-joined ones
         # are - grouping is a real alternative ("either responds to #foo, or
         # responds to #bar"), not the same method-list convention. But a
@@ -514,7 +514,7 @@ RSpec.describe YARD::Tags::TypesExplainer do
     it "treats '|' as a synonym for ',' everywhere a union is legal" do
       # '&' never needs '[...]' - it's legal (and binds tightest) everywhere
       expect(YARD::Tags::TypesExplainer.explain("Array<Foo & Bar, Baz>")).to eq(
-        "an Array of (Foos and Bars or Bazs)"
+        "an Array of (both Foos and Bars or Bazs)"
       )
       # a bare '|' at the top level is just another spelling of ','
       expect(YARD::Tags::TypesExplainer.explain("Foo & Bar | Baz")).to eq(
@@ -536,10 +536,10 @@ RSpec.describe YARD::Tags::TypesExplainer do
       # '&' still binds tighter than '|' inside a fixed-tuple slot, exactly
       # as it does everywhere else
       expect(YARD::Tags::TypesExplainer.explain("Array(Foo & Bar | Baz, Qux)")).to eq(
-        "an Array containing (((a Foo and a Bar) or a Baz) followed by a Qux)"
+        "an Array containing (((both a Foo and a Bar) or a Baz) followed by a Qux)"
       )
       expect(YARD::Tags::TypesExplainer.explain("Array(Foo | Bar & Baz, Qux)")).to eq(
-        "an Array containing ((a Foo or (a Bar and a Baz)) followed by a Qux)"
+        "an Array containing ((a Foo or (both a Bar and a Baz)) followed by a Qux)"
       )
     end
 
@@ -547,11 +547,11 @@ RSpec.describe YARD::Tags::TypesExplainer do
       # without brackets, '|' at the top level is just ',' - so this is two
       # independent top-level items, NOT one intersection
       expect(YARD::Tags::TypesExplainer.explain("Foo | Bar & Baz")).to eq(
-        "a Foo; a Bar and a Baz"
+        "a Foo; both a Bar and a Baz"
       )
       # '[...]' raises the union's precedence above '&' to get the other reading
       expect(YARD::Tags::TypesExplainer.explain("[Foo | Bar] & Baz")).to eq(
-        "(a Foo or a Bar) and a Baz"
+        "both (a Foo or a Bar) and a Baz"
       )
     end
 

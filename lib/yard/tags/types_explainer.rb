@@ -78,7 +78,11 @@ module YARD
         end
 
         def to_s(singular = true)
-          list_join(types.map {|t| t.to_s(singular) }, with: "and")
+          # A leading "both"/"all of" disambiguates a single value
+          # satisfying every listed type from what "a Foo and a Bar" alone
+          # could otherwise read as - two separate things.
+          prefix = types.size == 2 ? "both " : "all of "
+          prefix + list_join(types.map {|t| t.to_s(singular) }, with: "and")
         end
       end
 

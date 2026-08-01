@@ -1,7 +1,9 @@
 # main
 
 - Add support for intersection (`Foo & Bar`) types: a value must satisfy
-  every type listed, rather than any one of them (closes #1644)
+  every type listed, rather than any one of them, reading as "both a Foo
+  and a Bar" (or "all of a Foo, a Bar, and a Baz" for 3+) to avoid reading
+  like two separate values (closes #1644)
 - Add `|` as a second way to write a union (`Foo | Bar`, a synonym for
   `Foo, Bar` everywhere except directly inside `Array(...)`, where it
   groups one slot instead) (closes #1699)
