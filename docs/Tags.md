@@ -288,11 +288,12 @@ Result whose first type parameter is a Success or a Failure.
 
 #### Grouping
 
-Just like parentheses in algebra, `[...]` groups a list of types -
-written with either `,` or `|` - into a single type, letting you control
-how it combines with the types around it. For example, grouping a union
-lets it be used as one conjunct of an intersection, where a bare union
-would otherwise have no way to mark where it ends: `[Integer | String] & Comparable`.
+Just like parentheses in algebra, `[...]` groups an expression into a
+single type, letting you control how it combines with the types around
+it - here, that expression is a union, written with either `,` or `|`.
+For example, grouping a union lets it be used as one conjunct of an
+intersection, where a bare union would otherwise have no way to mark
+where it ends: `[Integer | String] & Comparable`.
 
 <p class="note">
   This <code>[...]</code> is unrelated to the <code>[Types]</code> brackets
