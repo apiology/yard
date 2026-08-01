@@ -279,9 +279,9 @@ A single slot can itself be a union of types joined with `|`: in
 `Array(Integer | String, Symbol)`, the first slot is an `Integer` or a
 `String`, followed by a `Symbol`. `,` can't be reused for this the way it
 is everywhere else, since inside `(...)` it already means "next slot," not
-"either of these" - see [Grouped Unions](#Grouped_Unions) below.
+"either of these" - see [Union Operator](#Union_Operator) below.
 
-#### Grouped Unions
+#### Union Operator
 
 `|` is a second way to write a union, meaning the same thing as `,`
 ("either of these") almost everywhere: `Integer | String` means the same
@@ -295,14 +295,15 @@ losing its own meaning; instead, `|` keeps meaning "either of these," just
 scoped to a single slot: `Array(Integer | String, Symbol)` is a 2-element
 Array, not a 3-element one.
 
-Square brackets, `[...]`, group a union - written with either `,` or
-`|` - into a single type that can be used anywhere a type is expected. This
-is what makes `Array(Integer | String, Symbol)` also writable as
-`Array([Integer | String], Symbol)`; both describe the same type. `[...]`
-still earns its keep even though `|` alone now covers the order-dependent-list
-case: it's the only way to group a union for use as one conjunct of a
-top-level intersection (see [Operator Precedence](#Operator_Precedence)
-below), since a bare union there has no way to mark where it ends.
+#### Grouping
+
+Square brackets, `[...]`, group a list of types - written with either `,`
+or `|` - into a single type that can be used anywhere a type is expected.
+Grouping is what makes `Array(Integer | String, Symbol)` also writable as
+`Array([Integer | String], Symbol)`; both describe the same type. Its main
+use is grouping a union for use as one conjunct of a top-level intersection
+(see [Operator Precedence](#Operator_Precedence) below), since a bare
+union there has no way to mark where it ends: `[Integer | String] & Comparable`.
 
 <p class="note">
   This <code>[...]</code> is unrelated to the <code>[Types]</code> brackets

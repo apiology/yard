@@ -1,11 +1,13 @@
 # main
 
-- Add support for intersection (`Foo & Bar`) types, and `|` as a second
-  way to write a union (`Foo | Bar`, a synonym for `Foo, Bar` everywhere
-  except directly inside `Array(...)`, where it groups one slot instead);
-  add `[...]` to group a union for use as one slot of an order-dependent
-  list or one conjunct of an intersection (closes #1644, #1699); document
-  the existing anonymous `<A>`, `(A)`, and `{A=>B}` shorthand forms
+- Add support for intersection (`Foo & Bar`) types: a value must satisfy
+  every type listed, rather than any one of them (closes #1644)
+- Add `|` as a second way to write a union (`Foo | Bar`, a synonym for
+  `Foo, Bar` everywhere except directly inside `Array(...)`, where it
+  groups one slot instead) (closes #1699)
+- Add `[...]` to group a union into a single type, for use as one slot of
+  an order-dependent list or one conjunct of an intersection (closes #1699)
+- Document the existing anonymous `<A>`, `(A)`, and `{A=>B}` shorthand forms
 - Stop assuming `Foo<A, B>` always means "A or B": only `Array`/`Set` (known
   homogeneous collections) keep that implicit-union reading; any other
   name with 2+ type parameters now reads neutrally as "with type
