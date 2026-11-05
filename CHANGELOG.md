@@ -1,5 +1,7 @@
 # main
 
+- Add `[A | B]` grouped-union syntax for type tags (closes #1699); document the
+  existing anonymous `<A>`, `(A)`, and `{A=>B}` shorthand forms
 - Fix duplicate "View source" links after client-side navigation in default HTML template
 - Fix duplicated character class range warning in HybridMarkdown
 
